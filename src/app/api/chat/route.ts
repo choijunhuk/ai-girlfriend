@@ -10,11 +10,11 @@ import type { Character, EmotionType } from '@/types';
 
 const CharacterSchema = z.object({
   id: z.string().uuid(),
-  name: z.string(),
-  personality: z.string(),
-  backstory: z.string(),
-  speechStyle: z.string(),
-  avatarEmoji: z.string(),
+  name: z.string().max(100),
+  personality: z.string().max(500),
+  backstory: z.string().max(500),
+  speechStyle: z.string().max(300),
+  avatarEmoji: z.string().max(10),
   aiModel: z.enum(['claude', 'openai']),
 });
 
