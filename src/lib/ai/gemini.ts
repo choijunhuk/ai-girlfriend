@@ -12,7 +12,7 @@ export async function streamWithGemini(
   systemPrompt: string
 ): Promise<ReadableStream<Uint8Array>> {
   const model = getClient().getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-1.5-flash',
     systemInstruction: systemPrompt,
     generationConfig: { maxOutputTokens: 1024 },
   });
@@ -49,7 +49,7 @@ export async function geminiVision(
   systemPrompt: string
 ): Promise<string> {
   const model = getClient().getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-1.5-flash',
     systemInstruction: systemPrompt,
     generationConfig: { maxOutputTokens: 500 },
   });
@@ -63,7 +63,7 @@ export async function geminiVision(
 
 export async function geminiEmotion(message: string, currentEmotion: string): Promise<string> {
   const model = getClient().getGenerativeModel({
-    model: 'gemini-2.0-flash-lite',
+    model: 'gemini-1.5-flash-8b',
     generationConfig: { maxOutputTokens: 10, temperature: 0.2 },
   });
 
@@ -75,7 +75,7 @@ export async function geminiEmotion(message: string, currentEmotion: string): Pr
 
 export async function geminiGenerate(prompt: string): Promise<string> {
   const model = getClient().getGenerativeModel({
-    model: 'gemini-2.0-flash-lite',
+    model: 'gemini-1.5-flash-8b',
     generationConfig: { maxOutputTokens: 300 },
   });
   const result = await model.generateContent(prompt);
