@@ -4,9 +4,11 @@ import { detectEmotion } from '@/lib/ai/openai';
 import { parseEmotion, inferEmotionFromKeywords } from '@/lib/emotions/emotion-tracker';
 import type { EmotionResponse, EmotionType } from '@/types';
 
+const EMOTION_VALUES = ['happy', 'loving', 'excited', 'neutral', 'shy', 'sad', 'worried', 'angry'] as const;
+
 const EmotionSchema = z.object({
   message: z.string().min(1).max(4000),
-  currentEmotion: z.string(),
+  currentEmotion: z.enum(EMOTION_VALUES),
 });
 
 export async function POST(req: NextRequest) {

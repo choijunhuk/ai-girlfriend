@@ -30,6 +30,17 @@ export async function POST(req: NextRequest) {
 
   const { message, conversationId, characterId, model } = parsed.data;
 
+  const ownershipCheck = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('id', conversationId)
+    .eq('character_id', characterId)
+    .single();
+
+  if (ownershipCheck.error || !ownershipCheck.data) {
+    return new Response('Not found', { status: 404 });
+  }
+
   const [historyResult, memoriesResult, characterResult] = await Promise.all([
     getConversationHistory(conversationId),
     getMemorySummaries(characterId),
