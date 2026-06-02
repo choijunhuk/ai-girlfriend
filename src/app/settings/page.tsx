@@ -2,7 +2,7 @@ import { CharacterSettingsForm } from '@/components/settings/CharacterSettingsFo
 
 export default function SettingsPage() {
   return (
-    <div className="min-h-screen bg-pink-50/30 py-8">
+    <div className="min-h-screen bg-pink-50/30 dark:bg-gray-950 py-8">
       <CharacterSettingsForm />
     </div>
   );

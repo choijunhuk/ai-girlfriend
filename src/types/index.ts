@@ -17,6 +17,7 @@ export interface Message {
   role: MessageRole;
   content: string;
   emotion?: EmotionType;
+  imageUrl?: string;
   createdAt: Date;
 }
 
@@ -28,8 +29,16 @@ export interface Character {
   speechStyle: string;
   avatarEmoji: string;
   aiModel: AIModel;
+  affinityScore?: number;
   createdAt?: Date;
   updatedAt?: Date;
+}
+
+export interface UserFact {
+  id: string;
+  characterId: string;
+  fact: string;
+  createdAt: Date;
 }
 
 export interface ConversationState {

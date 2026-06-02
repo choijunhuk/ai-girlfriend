@@ -1,18 +1,23 @@
 'use client';
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CharacterCard } from '@/components/character/CharacterCard';
 import { ChatWindow } from '@/components/chat/ChatWindow';
 import { InputBar } from '@/components/chat/InputBar';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { useChatStore } from '@/store/chat';
 import { useCharacterStore } from '@/store/character';
-import { createConversation } from '@/lib/memory/conversation';
-import type { Message } from '@/types';
+import { createConversation, saveCharacter } from '@/lib/memory/conversation';
+import type { EmotionType, Message } from '@/types';
+import { EMOTION_EMOJI } from '@/types';
+
+const POSITIVE_EMOTIONS: EmotionType[] = ['happy', 'loving', 'excited'];
+const VALID_EMOTIONS = new Set(Object.keys(EMOTION_EMOJI) as EmotionType[]);
 
 export default function Home() {
   const router = useRouter();
-  const { character, initDefault } = useCharacterStore();
+  const { character, initDefault, bumpAffinity } = useCharacterStore();
   const {
     messages,
     currentEmotion,
@@ -26,13 +31,34 @@ export default function Home() {
     setStreaming,
     setEmotion,
     toggleTTS,
+    clearMessages,
   } = useChatStore();
+
+  const [emotionHistory, setEmotionHistory] = useState<EmotionType[]>([]);
 
   useEffect(() => {
     initDefault();
   }, [initDefault]);
 
+  // Sync active character to Supabase on mount/switch — prevents phantom character 404s
+  useEffect(() => {
+    if (character) saveCharacter(character).catch(() => {});
+  }, [character?.id]);
+
   const isCreatingConversation = useRef(false);
+  const prevCharacterId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!character) {
+      prevCharacterId.current = null;
+      return;
+    }
+    if (character.id === prevCharacterId.current) return;
+    prevCharacterId.current = character.id;
+    clearMessages();
+    setConversationId(null);
+  }, [character?.id, clearMessages, setConversationId]);
+
   useEffect(() => {
     if (!character || conversationId || isCreatingConversation.current) return;
     isCreatingConversation.current = true;
@@ -42,9 +68,12 @@ export default function Home() {
       .finally(() => { isCreatingConversation.current = false; });
   }, [character, conversationId, setConversationId]);
 
+  const trackEmotion = useCallback((emotion: EmotionType) => {
+    setEmotionHistory((prev) => [...prev.slice(-19), emotion]);
+  }, []);
+
   const updateEmotion = useCallback(
     async (message: string) => {
-      // Use getState() to avoid stale closure on currentEmotion
       const current = useChatStore.getState().currentEmotion;
       try {
         const res = await fetch('/api/emotion', {
@@ -54,10 +83,17 @@ export default function Home() {
         });
         if (!res.ok) return;
         const { emotion } = await res.json();
+        if (!emotion || !VALID_EMOTIONS.has(emotion)) return;
         setEmotion(emotion);
+        trackEmotion(emotion);
+        if (POSITIVE_EMOTIONS.includes(emotion)) {
+          bumpAffinity(2);
+        } else {
+          bumpAffinity(1);
+        }
       } catch {}
     },
-    [setEmotion]
+    [setEmotion, trackEmotion, bumpAffinity]
   );
 
   const playTTS = useCallback(async (text: string) => {
@@ -133,26 +169,80 @@ export default function Home() {
     ]
   );
 
+  const sendImage = useCallback(
+    async (imageBase64: string, mimeType: string, caption: string) => {
+      if (!character || !conversationId || isStreaming) return;
+
+      const previewUrl = `data:${mimeType};base64,${imageBase64}`;
+      const userMsg: Message = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: caption,
+        imageUrl: previewUrl,
+        createdAt: new Date(),
+      };
+      addMessage(userMsg);
+      setStreaming(true);
+      startAssistantMessage();
+
+      try {
+        const res = await fetch('/api/chat/image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: caption,
+            imageBase64,
+            mimeType,
+            conversationId,
+            characterId: character.id,
+          }),
+        });
+
+        if (!res.ok) throw new Error('Image chat failed');
+        const { reply, emotion } = await res.json();
+        appendToLastAssistantMessage(reply);
+        if (emotion) {
+          setEmotion(emotion);
+          trackEmotion(emotion);
+          bumpAffinity(POSITIVE_EMOTIONS.includes(emotion) ? 3 : 1);
+        }
+
+        if (useChatStore.getState().ttsEnabled && reply) {
+          await playTTS(reply.slice(0, 200));
+        }
+      } catch {
+        appendToLastAssistantMessage('\n(이미지 처리 중 오류가 발생했어요 😢)');
+      } finally {
+        setStreaming(false);
+      }
+    },
+    [
+      character, conversationId, isStreaming,
+      addMessage, startAssistantMessage, appendToLastAssistantMessage,
+      setStreaming, setEmotion, trackEmotion, bumpAffinity, playTTS,
+    ]
+  );
+
   if (!character) {
     return (
-      <div className="h-screen flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center bg-white dark:bg-gray-950">
         <div className="text-4xl animate-spin">🌸</div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex bg-pink-50/30 overflow-hidden">
-      <aside className="hidden md:flex flex-col w-48 p-4 border-r border-pink-100 bg-white/60 shrink-0">
-        <CharacterCard character={character} emotion={currentEmotion} />
+    <div className="h-screen flex bg-pink-50/30 dark:bg-gray-950 overflow-hidden">
+      <aside className="hidden md:flex flex-col w-52 p-4 border-r border-pink-100 dark:border-gray-800 bg-white/60 dark:bg-gray-900/60 shrink-0">
+        <CharacterCard character={character} emotion={currentEmotion} emotionHistory={emotionHistory} />
       </aside>
 
       <main className="flex flex-col flex-1 overflow-hidden">
-        <header className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-pink-100 bg-white/80">
-          <span className="text-2xl">{character.avatarEmoji}</span>
-          <div>
-            <p className="font-semibold text-gray-800 text-sm">{character.name}</p>
-            <p className="text-xs text-gray-400">
+        <header className="flex items-center gap-3 px-4 py-3 border-b border-pink-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80">
+          <span className="text-2xl md:hidden">{character.avatarEmoji}</span>
+          <div className="md:hidden">
+            <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{character.name}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
               {currentEmotion === 'happy' && '😊 행복해요'}
               {currentEmotion === 'loving' && '💕 사랑스러워요'}
               {currentEmotion === 'excited' && '🥰 설레요'}
@@ -163,9 +253,18 @@ export default function Home() {
               {currentEmotion === 'angry' && '😠 삐졌어요'}
             </p>
           </div>
+          <div className="flex-1" />
+          <ThemeToggle />
+          <button
+            onClick={() => router.push('/characters')}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-sm"
+            title="캐릭터 변경"
+          >
+            👥
+          </button>
           <button
             onClick={() => router.push('/settings')}
-            className="ml-auto text-gray-400 hover:text-gray-600 text-sm"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-sm"
           >
             ⚙️
           </button>
@@ -180,6 +279,7 @@ export default function Home() {
 
         <InputBar
           onSend={sendMessage}
+          onSendImage={sendImage}
           disabled={isStreaming || !conversationId}
           ttsEnabled={ttsEnabled}
           onToggleTTS={toggleTTS}

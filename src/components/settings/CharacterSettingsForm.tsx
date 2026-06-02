@@ -46,7 +46,7 @@ export function CharacterSettingsForm() {
 
   return (
     <div className="max-w-lg mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-gray-800">💝 캐릭터 설정</h1>
+      <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">💝 캐릭터 설정</h1>
 
       {/* Avatar */}
       <div>

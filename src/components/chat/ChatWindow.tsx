@@ -21,7 +21,7 @@ export function ChatWindow({ messages, isStreaming, character, emotion }: Props)
 
   if (messages.length === 0 && !isStreaming) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-400 p-8">
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-400 dark:text-gray-500 p-8">
         <span className="text-5xl">{character.avatarEmoji}</span>
         <p className="text-sm text-center">
           <span className="font-semibold text-pink-400">{character.name}</span>이(가) 기다리고 있어요 💕

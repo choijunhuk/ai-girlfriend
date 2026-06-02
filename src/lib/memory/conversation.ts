@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { Message, Character, MemorySummary } from '@/types';
+export { getUserFacts, saveUserFacts } from './user-facts';
 
 export async function createConversation(characterId: string): Promise<string> {
   const { data, error } = await supabase
@@ -16,13 +17,15 @@ export async function saveMessage(
   conversationId: string,
   role: 'user' | 'assistant',
   content: string,
-  emotion?: string
+  emotion?: string,
+  imageUrl?: string
 ): Promise<void> {
   const { error } = await supabase.from('messages').insert({
     conversation_id: conversationId,
     role,
     content,
     emotion: emotion ?? 'neutral',
+    ...(imageUrl ? { image_url: imageUrl } : {}),
   });
   if (error) throw error;
 }
@@ -45,56 +48,9 @@ export async function getConversationHistory(
     role: row.role,
     content: row.content,
     emotion: row.emotion,
+    imageUrl: row.image_url ?? undefined,
     createdAt: new Date(row.created_at),
   }));
-}
-
-export async function getOrCreateCharacter(
-  characterData: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>
-): Promise<Character> {
-  const { data: existing } = await supabase
-    .from('characters')
-    .select('*')
-    .eq('user_id', 'default')
-    .limit(1)
-    .single();
-
-  if (existing) {
-    return {
-      id: existing.id,
-      name: existing.name,
-      personality: existing.personality,
-      backstory: existing.backstory,
-      speechStyle: existing.speech_style,
-      avatarEmoji: existing.avatar_emoji,
-      aiModel: existing.ai_model,
-    };
-  }
-
-  const { data, error } = await supabase
-    .from('characters')
-    .insert({
-      name: characterData.name,
-      personality: characterData.personality,
-      backstory: characterData.backstory,
-      speech_style: characterData.speechStyle,
-      avatar_emoji: characterData.avatarEmoji,
-      ai_model: characterData.aiModel,
-    })
-    .select('*')
-    .single();
-
-  if (error) throw error;
-
-  return {
-    id: data.id,
-    name: data.name,
-    personality: data.personality,
-    backstory: data.backstory,
-    speechStyle: data.speech_style,
-    avatarEmoji: data.avatar_emoji,
-    aiModel: data.ai_model,
-  };
 }
 
 export async function saveCharacter(character: Character): Promise<void> {
@@ -108,8 +64,30 @@ export async function saveCharacter(character: Character): Promise<void> {
       speech_style: character.speechStyle,
       avatar_emoji: character.avatarEmoji,
       ai_model: character.aiModel,
+      affinity_score: character.affinityScore ?? 0,
     });
   if (error) throw error;
+}
+
+export async function getCharacterById(characterId: string): Promise<Character | null> {
+  const { data, error } = await supabase
+    .from('characters')
+    .select('*')
+    .eq('id', characterId)
+    .single();
+
+  if (error || !data) return null;
+
+  return {
+    id: data.id,
+    name: data.name,
+    personality: data.personality,
+    backstory: data.backstory,
+    speechStyle: data.speech_style,
+    avatarEmoji: data.avatar_emoji,
+    aiModel: data.ai_model,
+    affinityScore: data.affinity_score ?? 0,
+  };
 }
 
 export async function getMemorySummaries(

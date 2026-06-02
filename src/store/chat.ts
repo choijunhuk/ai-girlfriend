@@ -8,7 +8,7 @@ interface ChatStore {
   conversationId: string | null;
   ttsEnabled: boolean;
 
-  setConversationId: (id: string) => void;
+  setConversationId: (id: string | null) => void;
   addMessage: (message: Message) => void;
   appendToLastAssistantMessage: (text: string) => void;
   setStreaming: (val: boolean) => void;
@@ -25,7 +25,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   conversationId: null,
   ttsEnabled: false,
 
-  setConversationId: (id) => set({ conversationId: id }),
+  setConversationId: (id) => set({ conversationId: id ?? null }),
 
   addMessage: (message) =>
     set((state) => ({ messages: [...state.messages, message] })),
