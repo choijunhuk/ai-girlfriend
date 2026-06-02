@@ -7,39 +7,59 @@ function getClient() {
   return new GoogleGenerativeAI(apiKey);
 }
 
+function errorStream(msg: string): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(c) { c.enqueue(encoder.encode(msg)); c.close(); },
+  });
+}
+
+function classifyError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes('429') || msg.includes('quota')) return '(API 할당량 초과 — aistudio.google.com에서 새 키 발급 필요 😢)';
+  if (msg.includes('404')) return '(모델을 찾을 수 없어요 — Generative Language API 활성화 필요 😢)';
+  if (msg.includes('API_KEY') || msg.includes('403')) return '(API 키 오류 — .env.local 확인 필요 😢)';
+  return '(연결 오류가 발생했어요 😢)';
+}
+
 export async function streamWithGemini(
   messages: Message[],
   systemPrompt: string
 ): Promise<ReadableStream<Uint8Array>> {
-  const model = getClient().getGenerativeModel({
-    model: 'gemini-1.5-flash',
-    systemInstruction: systemPrompt,
-    generationConfig: { maxOutputTokens: 1024 },
-  });
+  try {
+    const model = getClient().getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      systemInstruction: systemPrompt,
+      generationConfig: { maxOutputTokens: 1024 },
+    });
 
-  const history = messages.slice(0, -1).map((m) => ({
-    role: m.role === 'user' ? 'user' : 'model',
-    parts: [{ text: m.content }],
-  }));
+    const history = messages.slice(0, -1).map((m) => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.content }],
+    }));
 
-  const last = messages[messages.length - 1];
-  const chat = model.startChat({ history });
-  const result = await chat.sendMessageStream(last?.content ?? '');
+    const last = messages[messages.length - 1];
+    const chat = model.startChat({ history });
+    const result = await chat.sendMessageStream(last?.content ?? '');
 
-  const encoder = new TextEncoder();
-  return new ReadableStream<Uint8Array>({
-    async start(controller) {
-      try {
-        for await (const chunk of result.stream) {
-          const text = chunk.text();
-          if (text) controller.enqueue(encoder.encode(text));
+    const encoder = new TextEncoder();
+    return new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          for await (const chunk of result.stream) {
+            const text = chunk.text();
+            if (text) controller.enqueue(encoder.encode(text));
+          }
+          controller.close();
+        } catch (err) {
+          controller.enqueue(encoder.encode(classifyError(err)));
+          controller.close();
         }
-        controller.close();
-      } catch (err) {
-        controller.error(err);
-      }
-    },
-  });
+      },
+    });
+  } catch (err) {
+    return errorStream(classifyError(err));
+  }
 }
 
 export async function geminiVision(
