@@ -92,17 +92,6 @@ export default function CharactersPage() {
                 />
               </div>
             ))}
-            <div>
-              <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">AI 모델</label>
-              <select
-                className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                value={form.aiModel}
-                onChange={(e) => setForm((f) => ({ ...f, aiModel: e.target.value as 'claude' | 'openai' }))}
-              >
-                <option value="claude">🟣 Claude</option>
-                <option value="openai">🟢 GPT-4o</option>
-              </select>
-            </div>
             <button
               onClick={handleAdd}
               disabled={!form.name.trim() || saving}

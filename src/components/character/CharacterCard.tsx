@@ -13,7 +13,7 @@ interface Props {
   emotionHistory?: EmotionType[];
 }
 
-const MODEL_LABEL = { claude: '🟣 Claude', openai: '🟢 GPT-4o' };
+const MODEL_LABEL: Record<string, string> = { gemini: '✨ Gemini', claude: '🟣 Claude', openai: '🟢 GPT-4o' };
 
 export function CharacterCard({ character, emotion, emotionHistory = [] }: Props) {
   return (

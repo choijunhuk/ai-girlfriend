@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { detectEmotion } from '@/lib/ai/openai';
+import { geminiEmotion } from '@/lib/ai/gemini';
 import { parseEmotion, inferEmotionFromKeywords } from '@/lib/emotions/emotion-tracker';
 import type { EmotionResponse, EmotionType } from '@/types';
 
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const raw = await detectEmotion(message, currentEmotion);
+    const raw = await geminiEmotion(message, currentEmotion);
     const emotion = parseEmotion(raw, currentEmotion as EmotionType);
     return Response.json({ emotion } satisfies EmotionResponse);
   } catch (err) {

@@ -96,18 +96,13 @@ export default function Home() {
     [setEmotion, trackEmotion, bumpAffinity]
   );
 
-  const playTTS = useCallback(async (text: string) => {
+  const playTTS = useCallback((text: string) => {
     try {
-      const res = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.onended = () => URL.revokeObjectURL(url);
-      await audio.play();
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ko-KR';
+      window.speechSynthesis.speak(utterance);
     } catch {}
   }, []);
 
@@ -133,7 +128,6 @@ export default function Home() {
             message: text,
             conversationId,
             characterId: character.id,
-            model: character.aiModel,
             character: {
               id: character.id,
               name: character.name,
@@ -163,7 +157,7 @@ export default function Home() {
         await updateEmotion(fullResponse);
 
         if (useChatStore.getState().ttsEnabled && fullResponse) {
-          await playTTS(fullResponse.slice(0, 200));
+          playTTS(fullResponse.slice(0, 200));
         }
       } catch {
         appendToLastAssistantMessage('\n(연결 오류가 발생했어요 😢)');
@@ -226,7 +220,7 @@ export default function Home() {
         }
 
         if (useChatStore.getState().ttsEnabled && reply) {
-          await playTTS(reply.slice(0, 200));
+          playTTS(reply.slice(0, 200));
         }
       } catch {
         appendToLastAssistantMessage('\n(이미지 처리 중 오류가 발생했어요 😢)');

@@ -8,7 +8,7 @@ export type EmotionType =
   | 'loving'
   | 'worried';
 
-export type AIModel = 'claude' | 'openai';
+export type AIModel = 'gemini';
 
 export type MessageRole = 'user' | 'assistant';
 
@@ -107,5 +107,5 @@ export const DEFAULT_CHARACTER: Omit<Character, 'id' | 'createdAt' | 'updatedAt'
   backstory: '우리는 오랜 친구에서 연인이 된 사이야. 서로를 잘 이해하고 편하게 대화해',
   speechStyle: '친근하고 자연스러운 한국어로, 가끔 애교도 섞어가며 대화해',
   avatarEmoji: '🌸',
-  aiModel: 'claude',
+  aiModel: 'gemini',
 };

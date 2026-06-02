@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCharacterStore } from '@/store/character';
 import { saveCharacter } from '@/lib/memory/conversation';
-import type { AIModel, Character } from '@/types';
+import type { Character } from '@/types';
 import { DEFAULT_CHARACTER } from '@/types';
 
 const EMPTY: Character = { id: '', ...DEFAULT_CHARACTER };
@@ -123,26 +123,6 @@ export function CharacterSettingsForm() {
           className={`${inputClass} h-16 resize-none text-xs`}
           placeholder="직접 입력..."
         />
-      </Field>
-
-      {/* AI Model */}
-      <Field label="AI 모델">
-        <div className="flex gap-3">
-          {(['claude', 'openai'] as AIModel[]).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setForm((f) => ({ ...f, aiModel: m }))}
-              className={`flex-1 py-2 rounded-xl border-2 text-sm font-medium transition-all ${
-                form.aiModel === m
-                  ? 'border-pink-400 bg-pink-50 text-pink-700'
-                  : 'border-gray-200 text-gray-500 hover:border-gray-300'
-              }`}
-            >
-              {m === 'claude' ? '🟣 Claude' : '🟢 GPT-4o'}
-            </button>
-          ))}
-        </div>
       </Field>
 
       <button

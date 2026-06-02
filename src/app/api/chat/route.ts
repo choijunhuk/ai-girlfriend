@@ -15,14 +15,13 @@ const CharacterSchema = z.object({
   backstory: z.string().max(500),
   speechStyle: z.string().max(300),
   avatarEmoji: z.string().max(10),
-  aiModel: z.enum(['claude', 'openai']),
+  aiModel: z.string().max(20),
 });
 
 const ChatSchema = z.object({
   message: z.string().min(1).max(4000),
   conversationId: z.string().uuid(),
   characterId: z.string().uuid(),
-  model: z.enum(['claude', 'openai']).optional(),
   character: CharacterSchema.optional(),
 });
 
@@ -39,7 +38,7 @@ export async function POST(req: NextRequest) {
     return new Response('Invalid request: ' + parsed.error.issues[0]?.message, { status: 400 });
   }
 
-  const { message, conversationId, characterId, model, character: inlineCharacter } = parsed.data;
+  const { message, conversationId, characterId, character: inlineCharacter } = parsed.data;
 
   if (isSupabaseConfigured()) {
     const ownershipCheck = await supabase
@@ -51,10 +50,7 @@ export async function POST(req: NextRequest) {
     if (ownershipCheck.error || !ownershipCheck.data) {
       return new Response('Not found', { status: 404 });
     }
-  }
 
-  let character: Character;
-  if (isSupabaseConfigured()) {
     const [historyResult, memoriesResult, characterResult, userFactsResult] = await Promise.all([
       getConversationHistory(conversationId),
       getMemorySummaries(characterId),
@@ -67,14 +63,14 @@ export async function POST(req: NextRequest) {
     }
 
     const char = characterResult.data;
-    character = {
+    const character: Character = {
       id: char.id,
       name: char.name,
       personality: char.personality,
       backstory: char.backstory,
       speechStyle: char.speech_style,
       avatarEmoji: char.avatar_emoji,
-      aiModel: char.ai_model,
+      aiModel: 'gemini',
     };
 
     const currentEmotion: EmotionType =
@@ -85,9 +81,10 @@ export async function POST(req: NextRequest) {
       ...historyResult,
       { id: 'new', role: 'user' as const, content: message, createdAt: new Date() },
     ];
+
     let fullResponse = '';
     const decoder = new TextDecoder();
-    const aiStream = await streamChat(model ?? character.aiModel, allMessages, systemPrompt);
+    const aiStream = await streamChat(allMessages, systemPrompt);
     const transformStream = new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
         fullResponse += decoder.decode(chunk, { stream: true });
@@ -112,15 +109,15 @@ export async function POST(req: NextRequest) {
   if (!inlineCharacter) {
     return new Response('character data required when Supabase is not configured', { status: 400 });
   }
-  character = inlineCharacter;
 
+  const character: Character = { ...inlineCharacter, aiModel: 'gemini' };
   const currentEmotion: EmotionType = 'neutral';
   const systemPrompt = buildSystemPrompt(character, currentEmotion, [], []);
   const allMessages = [{ id: 'new', role: 'user' as const, content: message, createdAt: new Date() }];
 
   let fullResponse = '';
   const decoder = new TextDecoder();
-  const aiStream = await streamChat(model ?? character.aiModel, allMessages, systemPrompt);
+  const aiStream = await streamChat(allMessages, systemPrompt);
 
   const transformStream = new TransformStream<Uint8Array, Uint8Array>({
     transform(chunk, controller) {

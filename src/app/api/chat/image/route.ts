@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import OpenAI from 'openai';
+import { geminiVision } from '@/lib/ai/gemini';
 import { supabase, isSupabaseConfigured } from '@/lib/memory/supabase';
 import { saveMessage, getConversationHistory, getMemorySummaries, getUserFacts } from '@/lib/memory/conversation';
 import { maybeSummarize } from '@/lib/memory/summarizer';
@@ -8,11 +8,7 @@ import { buildSystemPrompt } from '@/lib/ai/prompt-builder';
 import { inferEmotionFromKeywords } from '@/lib/emotions/emotion-tracker';
 import type { Character, EmotionType } from '@/types';
 
-function getClient() {
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-}
-
-const MAX_B64 = 7_000_000; // ~5MB decoded
+const MAX_B64 = 7_000_000;
 
 const MAGIC: Record<string, number[]> = {
   'image/jpeg': [0xff, 0xd8, 0xff],
@@ -35,7 +31,7 @@ const CharacterSchema = z.object({
   backstory: z.string().max(500),
   speechStyle: z.string().max(300),
   avatarEmoji: z.string().max(10),
-  aiModel: z.enum(['claude', 'openai']),
+  aiModel: z.string().max(20),
 });
 
 const ImageChatSchema = z.object({
@@ -102,7 +98,7 @@ export async function POST(req: NextRequest) {
       backstory: char.backstory,
       speechStyle: char.speech_style,
       avatarEmoji: char.avatar_emoji,
-      aiModel: char.ai_model,
+      aiModel: 'gemini',
     };
     currentEmotion = (historyResult.findLast((m) => m.emotion)?.emotion as EmotionType) ?? 'neutral';
     systemPrompt = buildSystemPrompt(character, currentEmotion, memoriesResult, userFactsResult);
@@ -110,37 +106,20 @@ export async function POST(req: NextRequest) {
     if (!inlineCharacter) {
       return new Response('character data required when Supabase is not configured', { status: 400 });
     }
-    character = inlineCharacter;
+    character = { ...inlineCharacter, aiModel: 'gemini' };
     systemPrompt = buildSystemPrompt(character, currentEmotion, [], []);
   }
 
-  const imageUrl = `data:${mimeType};base64,${imageBase64}`;
-  await saveMessage(conversationId, 'user', message || '(이미지를 공유했어요)', undefined, imageUrl);
+  await saveMessage(conversationId, 'user', message || '(이미지를 공유했어요)', undefined, `data:${mimeType};base64,${imageBase64}`);
 
   try {
-    const response = await getClient().chat.completions.create({
-      model: 'gpt-4o',
-      max_tokens: 500,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        {
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: imageUrl, detail: 'low' } },
-            { type: 'text', text: message || '이 사진 어때?' },
-          ],
-        },
-      ],
-    });
-
-    const reply = response.choices[0]?.message?.content ?? '(응답 없음)';
+    const reply = await geminiVision(message || '이 사진 어때?', imageBase64, mimeType, systemPrompt);
     const emotion = inferEmotionFromKeywords(reply, currentEmotion);
     await saveMessage(conversationId, 'assistant', reply, emotion);
     await maybeSummarize(conversationId, characterId).catch(() => {});
-
     return Response.json({ reply, emotion });
   } catch (err) {
-    console.error('[image chat] OpenAI error:', err);
+    console.error('[image chat] Gemini error:', err);
     return Response.json({ error: '이미지 처리 중 오류가 발생했어요' }, { status: 500 });
   }
 }
