@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import OpenAI from 'openai';
-import { supabase } from '@/lib/memory/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/memory/supabase';
 import { saveMessage, getConversationHistory, getMemorySummaries, getUserFacts } from '@/lib/memory/conversation';
 import { maybeSummarize } from '@/lib/memory/summarizer';
 import { buildSystemPrompt } from '@/lib/ai/prompt-builder';
@@ -28,12 +28,23 @@ function matchesMagic(base64: string, mime: string): boolean {
   return magic.every((b, i) => bytes[i] === b);
 }
 
+const CharacterSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  personality: z.string(),
+  backstory: z.string(),
+  speechStyle: z.string(),
+  avatarEmoji: z.string(),
+  aiModel: z.enum(['claude', 'openai']),
+});
+
 const ImageChatSchema = z.object({
   message: z.string().max(2000).default('이 사진 어때?'),
   imageBase64: z.string().min(1).max(MAX_B64).regex(/^[A-Za-z0-9+/=]+$/),
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif']).default('image/jpeg'),
   conversationId: z.string().uuid(),
   characterId: z.string().uuid(),
+  character: CharacterSchema.optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -49,52 +60,61 @@ export async function POST(req: NextRequest) {
     return new Response('Invalid request', { status: 400 });
   }
 
-  const { message, imageBase64, mimeType, conversationId, characterId } = parsed.data;
+  const { message, imageBase64, mimeType, conversationId, characterId, character: inlineCharacter } = parsed.data;
 
   if (!matchesMagic(imageBase64, mimeType)) {
     return new Response('Invalid image', { status: 400 });
   }
 
-  // NOTE: MVP has no user auth. UUID pair is the best ownership we can do without auth.
-  const ownershipCheck = await supabase
-    .from('conversations')
-    .select('id')
-    .eq('id', conversationId)
-    .eq('character_id', characterId)
-    .single();
-
-  if (ownershipCheck.error || !ownershipCheck.data) {
-    return new Response('Not found', { status: 404 });
+  if (isSupabaseConfigured()) {
+    const ownershipCheck = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .eq('character_id', characterId)
+      .single();
+    if (ownershipCheck.error || !ownershipCheck.data) {
+      return new Response('Not found', { status: 404 });
+    }
   }
 
-  const [historyResult, memoriesResult, characterResult, userFactsResult] = await Promise.all([
-    getConversationHistory(conversationId),
-    getMemorySummaries(characterId),
-    supabase.from('characters').select('*').eq('id', characterId).single(),
-    getUserFacts(characterId),
-  ]);
+  let character: Character;
+  let currentEmotion: EmotionType = 'neutral';
+  let systemPrompt: string;
 
-  if (characterResult.error || !characterResult.data) {
-    return new Response('Character not found', { status: 404 });
+  if (isSupabaseConfigured()) {
+    const [historyResult, memoriesResult, characterResult, userFactsResult] = await Promise.all([
+      getConversationHistory(conversationId),
+      getMemorySummaries(characterId),
+      supabase.from('characters').select('*').eq('id', characterId).single(),
+      getUserFacts(characterId),
+    ]);
+
+    if (characterResult.error || !characterResult.data) {
+      return new Response('Character not found', { status: 404 });
+    }
+
+    const char = characterResult.data;
+    character = {
+      id: char.id,
+      name: char.name,
+      personality: char.personality,
+      backstory: char.backstory,
+      speechStyle: char.speech_style,
+      avatarEmoji: char.avatar_emoji,
+      aiModel: char.ai_model,
+    };
+    currentEmotion = (historyResult.findLast((m) => m.emotion)?.emotion as EmotionType) ?? 'neutral';
+    systemPrompt = buildSystemPrompt(character, currentEmotion, memoriesResult, userFactsResult);
+  } else {
+    if (!inlineCharacter) {
+      return new Response('character data required when Supabase is not configured', { status: 400 });
+    }
+    character = inlineCharacter;
+    systemPrompt = buildSystemPrompt(character, currentEmotion, [], []);
   }
 
-  const char = characterResult.data;
-  const character: Character = {
-    id: char.id,
-    name: char.name,
-    personality: char.personality,
-    backstory: char.backstory,
-    speechStyle: char.speech_style,
-    avatarEmoji: char.avatar_emoji,
-    aiModel: char.ai_model,
-  };
-
-  const currentEmotion: EmotionType =
-    (historyResult.findLast((m) => m.emotion)?.emotion as EmotionType) ?? 'neutral';
-
-  const systemPrompt = buildSystemPrompt(character, currentEmotion, memoriesResult, userFactsResult);
   const imageUrl = `data:${mimeType};base64,${imageBase64}`;
-
   await saveMessage(conversationId, 'user', message || '(이미지를 공유했어요)', undefined, imageUrl);
 
   try {

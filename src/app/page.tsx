@@ -134,6 +134,15 @@ export default function Home() {
             conversationId,
             characterId: character.id,
             model: character.aiModel,
+            character: {
+              id: character.id,
+              name: character.name,
+              personality: character.personality,
+              backstory: character.backstory,
+              speechStyle: character.speechStyle,
+              avatarEmoji: character.avatarEmoji,
+              aiModel: character.aiModel,
+            },
           }),
         });
 
@@ -195,6 +204,15 @@ export default function Home() {
             mimeType,
             conversationId,
             characterId: character.id,
+            character: {
+              id: character.id,
+              name: character.name,
+              personality: character.personality,
+              backstory: character.backstory,
+              speechStyle: character.speechStyle,
+              avatarEmoji: character.avatarEmoji,
+              aiModel: character.aiModel,
+            },
           }),
         });
 
