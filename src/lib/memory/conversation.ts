@@ -1,8 +1,9 @@
-import { supabase } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 import type { Message, Character, MemorySummary } from '@/types';
 export { getUserFacts, saveUserFacts } from './user-facts';
 
 export async function createConversation(characterId: string): Promise<string> {
+  if (!isSupabaseConfigured()) return crypto.randomUUID();
   const { data, error } = await supabase
     .from('conversations')
     .insert({ character_id: characterId })
@@ -20,6 +21,7 @@ export async function saveMessage(
   emotion?: string,
   imageUrl?: string
 ): Promise<void> {
+  if (!isSupabaseConfigured()) return;
   const { error } = await supabase.from('messages').insert({
     conversation_id: conversationId,
     role,
@@ -34,6 +36,7 @@ export async function getConversationHistory(
   conversationId: string,
   limit = 50
 ): Promise<Message[]> {
+  if (!isSupabaseConfigured()) return [];
   const { data, error } = await supabase
     .from('messages')
     .select('*')
@@ -54,6 +57,7 @@ export async function getConversationHistory(
 }
 
 export async function saveCharacter(character: Character): Promise<void> {
+  if (!isSupabaseConfigured()) return;
   const { error } = await supabase
     .from('characters')
     .upsert({
@@ -70,6 +74,7 @@ export async function saveCharacter(character: Character): Promise<void> {
 }
 
 export async function getCharacterById(characterId: string): Promise<Character | null> {
+  if (!isSupabaseConfigured()) return null;
   const { data, error } = await supabase
     .from('characters')
     .select('*')
@@ -94,6 +99,7 @@ export async function getMemorySummaries(
   characterId: string,
   limit = 5
 ): Promise<MemorySummary[]> {
+  if (!isSupabaseConfigured()) return [];
   const { data, error } = await supabase
     .from('memory_summaries')
     .select('*')
@@ -118,6 +124,7 @@ export async function saveMemorySummary(
   periodStart: Date,
   periodEnd: Date
 ): Promise<void> {
+  if (!isSupabaseConfigured()) return;
   const { error } = await supabase.from('memory_summaries').insert({
     character_id: characterId,
     summary,

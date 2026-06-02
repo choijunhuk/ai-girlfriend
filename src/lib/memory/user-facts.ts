@@ -1,7 +1,8 @@
-import { supabase } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 import type { UserFact } from '@/types';
 
 export async function getUserFacts(characterId: string, limit = 20): Promise<UserFact[]> {
+  if (!isSupabaseConfigured()) return [];
   const { data, error } = await supabase
     .from('user_facts')
     .select('*')
@@ -20,7 +21,7 @@ export async function getUserFacts(characterId: string, limit = 20): Promise<Use
 }
 
 export async function saveUserFacts(characterId: string, facts: string[]): Promise<void> {
-  if (facts.length === 0) return;
+  if (facts.length === 0 || !isSupabaseConfigured()) return;
   const rows = facts.map((fact) => ({ character_id: characterId, fact }));
   await supabase.from('user_facts').insert(rows);
 }
