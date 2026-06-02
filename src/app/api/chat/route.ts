@@ -1,18 +1,34 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { streamChat } from '@/lib/ai/ai-factory';
 import { buildSystemPrompt } from '@/lib/ai/prompt-builder';
 import { saveMessage, getConversationHistory, getMemorySummaries } from '@/lib/memory/conversation';
 import { maybeSummarize } from '@/lib/memory/summarizer';
 import { supabase } from '@/lib/memory/supabase';
-import type { ChatRequest, Character, EmotionType } from '@/types';
+import { inferEmotionFromKeywords } from '@/lib/emotions/emotion-tracker';
+import type { Character, EmotionType } from '@/types';
+
+const ChatSchema = z.object({
+  message: z.string().min(1).max(4000),
+  conversationId: z.string().uuid(),
+  characterId: z.string().uuid(),
+  model: z.enum(['claude', 'openai']).optional(),
+});
 
 export async function POST(req: NextRequest) {
-  const body: ChatRequest = await req.json();
-  const { message, conversationId, characterId, model } = body;
-
-  if (!message || !conversationId || !characterId) {
-    return new Response('Missing required fields', { status: 400 });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response('Invalid JSON', { status: 400 });
   }
+
+  const parsed = ChatSchema.safeParse(body);
+  if (!parsed.success) {
+    return new Response('Invalid request: ' + parsed.error.issues[0]?.message, { status: 400 });
+  }
+
+  const { message, conversationId, characterId, model } = parsed.data;
 
   const [historyResult, memoriesResult, characterResult] = await Promise.all([
     getConversationHistory(conversationId),
@@ -35,14 +51,17 @@ export async function POST(req: NextRequest) {
     aiModel: char.ai_model,
   };
 
-  const lastEmotion: EmotionType =
+  const currentEmotion: EmotionType =
     (historyResult.findLast((m) => m.emotion)?.emotion as EmotionType) ?? 'neutral';
 
-  const systemPrompt = buildSystemPrompt(character, lastEmotion, memoriesResult);
+  const systemPrompt = buildSystemPrompt(character, currentEmotion, memoriesResult);
 
-  await saveMessage(conversationId, 'user', message, lastEmotion);
+  await saveMessage(conversationId, 'user', message, currentEmotion);
 
-  const allMessages = [...historyResult, { id: 'new', role: 'user' as const, content: message, createdAt: new Date() }];
+  const allMessages = [
+    ...historyResult,
+    { id: 'new', role: 'user' as const, content: message, createdAt: new Date() },
+  ];
 
   let fullResponse = '';
   const aiStream = await streamChat(model ?? character.aiModel, allMessages, systemPrompt);
@@ -53,7 +72,9 @@ export async function POST(req: NextRequest) {
       controller.enqueue(chunk);
     },
     async flush() {
-      await saveMessage(conversationId, 'assistant', fullResponse, lastEmotion);
+      // Detect emotion from the assistant's actual response before saving
+      const responseEmotion = inferEmotionFromKeywords(fullResponse, currentEmotion);
+      await saveMessage(conversationId, 'assistant', fullResponse, responseEmotion);
       await maybeSummarize(conversationId, characterId).catch(() => {});
     },
   });

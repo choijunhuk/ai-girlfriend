@@ -1,0 +1,11 @@
+{
+  "active": true,
+  "started_at": "2026-06-02T03:23:24.102Z",
+  "original_prompt": "/oh-my-claudecode:autopilot 좋은거 같고 github에 올리는 방식으로 하자 너 내 깃허브 알잖아 깃허브에 새 프로젝트 만들어서 해",
+  "session_id": "885b79db-2e8f-47a7-aa47-b5b402fc381a",
+  "project_path": "/Users/choi/Desktop/ai-girlfriend",
+  "reinforcement_count": 2,
+  "awaiting_confirmation": true,
+  "awaiting_confirmation_set_at": "2026-06-02T03:23:24.102Z",
+  "last_checked_at": "2026-06-02T03:27:23.304Z"
+}

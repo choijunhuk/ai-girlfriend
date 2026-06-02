@@ -1,16 +1,27 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { generateTTS } from '@/lib/ai/openai';
-import type { TTSRequest } from '@/types';
+
+const TTSSchema = z.object({
+  text: z.string().min(1).max(500),
+  voice: z.enum(['alloy', 'nova', 'shimmer', 'echo', 'fable', 'onyx']).optional(),
+});
 
 export async function POST(req: NextRequest) {
-  const body: TTSRequest = await req.json();
-  const { text, voice = 'nova' } = body;
-
-  if (!text) {
-    return new Response('Missing text', { status: 400 });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response('Invalid JSON', { status: 400 });
   }
 
-  const audioBuffer = await generateTTS(text.slice(0, 500), voice);
+  const parsed = TTSSchema.safeParse(body);
+  if (!parsed.success) {
+    return new Response('Invalid request', { status: 400 });
+  }
+
+  const { text, voice = 'nova' } = parsed.data;
+  const audioBuffer = await generateTTS(text, voice);
 
   return new Response(new Uint8Array(audioBuffer), {
     headers: {

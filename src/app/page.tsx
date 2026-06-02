@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { CharacterCard } from '@/components/character/CharacterCard';
 import { ChatWindow } from '@/components/chat/ChatWindow';
@@ -8,7 +8,7 @@ import { InputBar } from '@/components/chat/InputBar';
 import { useChatStore } from '@/store/chat';
 import { useCharacterStore } from '@/store/character';
 import { createConversation } from '@/lib/memory/conversation';
-import type { EmotionType, Message } from '@/types';
+import type { Message } from '@/types';
 
 export default function Home() {
   const router = useRouter();
@@ -32,23 +32,29 @@ export default function Home() {
     initDefault();
   }, [initDefault]);
 
+  const isCreatingConversation = useRef(false);
   useEffect(() => {
-    if (!character || conversationId) return;
+    if (!character || conversationId || isCreatingConversation.current) return;
+    isCreatingConversation.current = true;
     createConversation(character.id)
       .then(setConversationId)
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => { isCreatingConversation.current = false; });
   }, [character, conversationId, setConversationId]);
 
   const updateEmotion = useCallback(
-    async (message: string, current: EmotionType) => {
+    async (message: string) => {
+      // Use getState() to avoid stale closure on currentEmotion
+      const current = useChatStore.getState().currentEmotion;
       try {
         const res = await fetch('/api/emotion', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message, currentEmotion: current }),
         });
+        if (!res.ok) return;
         const { emotion } = await res.json();
-        setEmotion(emotion as EmotionType);
+        setEmotion(emotion);
       } catch {}
     },
     [setEmotion]
@@ -109,9 +115,9 @@ export default function Home() {
           appendToLastAssistantMessage(chunk);
         }
 
-        await updateEmotion(fullResponse, currentEmotion);
+        await updateEmotion(fullResponse);
 
-        if (ttsEnabled && fullResponse) {
+        if (useChatStore.getState().ttsEnabled && fullResponse) {
           await playTTS(fullResponse.slice(0, 200));
         }
       } catch {
@@ -121,7 +127,7 @@ export default function Home() {
       }
     },
     [
-      character, conversationId, isStreaming, currentEmotion, ttsEnabled,
+      character, conversationId, isStreaming,
       addMessage, startAssistantMessage, appendToLastAssistantMessage,
       setStreaming, updateEmotion, playTTS,
     ]
